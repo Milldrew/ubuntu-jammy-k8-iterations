@@ -1,0 +1,81 @@
+https://www.linuxtechi.com/install-kubernetes-on-ubuntu-22-04/
+
+
+
+
+
+# Switch to root
+sudo passwd root
+sudo su root
+
+Check the ubuntu version
+
+# Instructions here are for minimum Ubuntu 22.04
+lsb_release -a 
+
+# Check the minimum requirements
+lshw -short
+# 2gb ram, 2 cpu, 20gb disk
+
+
+# Disable swap files
+swapoff -a
+sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab # add # to the swap line in fstab any linke with swap in it
+
+# Load the kernel modules on all nodes
+tee /etc/modules-load.d/containerd.conf <<EOF
+overlay
+br_netfilter
+EOF
+
+
+modprobe overlay
+modprobe br_netfilter
+
+tee /etc/sysctl.d/kubernetes.conf <<EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+
+#apply changes
+sysctl --system
+
+#install containerd
+ apt install -y curl gnupg2 software-properties-common apt-transport-https ca-certificates
+ # enable docker repo
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmour -o /etc/apt/trusted.gpg.d/docker.gpg
+
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+apt update
+apt install -y containerd.io
+containerd config default |  tee /etc/containerd/config.toml >/dev/null 2>&1
+sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
+
+systemctl restart containerd
+systemctl enable containerd
+
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/kubernetes-xenial.gpg
+
+apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+
+apt update
+apt install -y kubelet kubeadm kubectl
+apt-mark hold kubelet kubeadm kubectl
+
+
+kubeadm init --control-plane-endpoint=k8smaster.example.net
+
+
+apt update
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+kubectl get nodes
+kubectl cluster-info
+
+
+apt install -y kubelet kubeadm kubectl
+apt-mark hold kubelet kubeadm kubectl
